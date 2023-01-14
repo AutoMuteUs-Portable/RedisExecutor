@@ -309,7 +309,8 @@ public class ExecutorController : ExecutorControllerBase
         #endregion
     }
 
-    public override async Task Install(Dictionary<string, string> parameters, ISubject<ProgressInfo>? progress = null)
+    public override async Task Install(Dictionary<string, string> parameters,
+        Dictionary<ExecutorType, ExecutorControllerBase> executors, ISubject<ProgressInfo>? progress = null)
     {
         #region Retrieve data from PocketBase
 
@@ -367,22 +368,25 @@ public class ExecutorController : ExecutorControllerBase
         #endregion
     }
 
-    public override Task Update(Dictionary<string, string> parameters, ISubject<ProgressInfo>? progress = null)
+    public override Task Update(Dictionary<string, string> parameters,
+        Dictionary<ExecutorType, ExecutorControllerBase> executors, ISubject<ProgressInfo>? progress = null)
     {
         progress?.OnCompleted();
         return Task.CompletedTask;
     }
 
     public override async Task InstallBySimpleSettings(object simpleSettings, object executorConfigurationBase,
+        Dictionary<ExecutorType, ExecutorControllerBase> executors,
         ISubject<ProgressInfo>? progress = null)
     {
-        await Install(new Dictionary<string, string>(), progress);
+        await Install(new Dictionary<string, string>(), executors, progress);
     }
 
     public override async Task UpdateBySimpleSettings(object simpleSettings, object executorConfigurationBase,
+        Dictionary<ExecutorType, ExecutorControllerBase> executors,
         ISubject<ProgressInfo>? progress = null)
     {
-        await Update(new Dictionary<string, string>(), progress);
+        await Update(new Dictionary<string, string>(), executors, progress);
     }
 
     private Task ExtractZip(string path, IProgress<double>? progress = null)
