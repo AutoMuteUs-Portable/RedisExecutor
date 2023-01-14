@@ -13,32 +13,32 @@ using FluentValidation;
 
 namespace AutoMuteUsPortable.Executor;
 
-public class ExecutorController : IExecutorController
+public class ExecutorController : ExecutorControllerBase
 {
-    public static Dictionary<string, Parameter> InstallParameters = new();
-    public static Dictionary<string, Parameter> UpdateParameters = new();
+    public new static Dictionary<string, Parameter> InstallParameters = new();
+    public new static Dictionary<string, Parameter> UpdateParameters = new();
     private readonly ExecutorConfiguration _executorConfiguration;
     private readonly PocketBaseClientApplication _pocketBaseClientApplication = new();
 
-    public ExecutorController(dynamic executorConfiguration)
+    public ExecutorController(object executorConfiguration) : base(executorConfiguration)
     {
         #region Check variables
 
-        string? binaryDirectory = Utils.PropertyByName<string>(executorConfiguration, "binaryDirectory");
+        var binaryDirectory = Utils.PropertyByName<string>(executorConfiguration, "binaryDirectory");
         if (binaryDirectory == null)
             throw new InvalidDataException("binaryDirectory cannot be null");
 
-        string? binaryVersion = Utils.PropertyByName<string>(executorConfiguration, "binaryVersion");
+        var binaryVersion = Utils.PropertyByName<string>(executorConfiguration, "binaryVersion");
         if (binaryVersion == null)
             throw new InvalidDataException("binaryVersion cannot be null");
 
-        string? version = Utils.PropertyByName<string>(executorConfiguration, "version");
+        var version = Utils.PropertyByName<string>(executorConfiguration, "version");
         if (version == null) throw new InvalidDataException("version cannot be null");
 
         ExecutorType? type = Utils.PropertyByName<ExecutorType>(executorConfiguration, "type");
         if (type == null) throw new InvalidDataException("type cannot be null");
 
-        Dictionary<string, string>? environmentVariables =
+        var environmentVariables =
             Utils.PropertyByName<Dictionary<string, string>>(executorConfiguration, "environmentVariables");
         if (environmentVariables == null) throw new InvalidDataException("environmentVariables cannot be null");
 
@@ -63,20 +63,20 @@ public class ExecutorController : IExecutorController
         #endregion
     }
 
-    public ExecutorController(dynamic computedSimpleSettings,
-        dynamic executorConfigurationBase)
+    public ExecutorController(object computedSimpleSettings,
+        object executorConfigurationBase) : base(computedSimpleSettings, executorConfigurationBase)
     {
         #region Check variables
 
-        string? binaryDirectory = Utils.PropertyByName<string>(executorConfigurationBase, "binaryDirectory");
+        var binaryDirectory = Utils.PropertyByName<string>(executorConfigurationBase, "binaryDirectory");
         if (binaryDirectory == null)
             throw new InvalidDataException("binaryDirectory cannot be null");
 
-        string? binaryVersion = Utils.PropertyByName<string>(executorConfigurationBase, "binaryVersion");
+        var binaryVersion = Utils.PropertyByName<string>(executorConfigurationBase, "binaryVersion");
         if (binaryVersion == null)
             throw new InvalidDataException("binaryVersion cannot be null");
 
-        string? version = Utils.PropertyByName<string>(executorConfigurationBase, "version");
+        var version = Utils.PropertyByName<string>(executorConfigurationBase, "version");
         if (version == null) throw new InvalidDataException("version cannot be null");
 
         ExecutorType? type = Utils.PropertyByName<ExecutorType>(executorConfigurationBase, "type");
@@ -84,7 +84,8 @@ public class ExecutorController : IExecutorController
 
         if (Utils.PropertyInfoByName(computedSimpleSettings, "port") == null)
             throw new InvalidDataException("port is not found in computedSimpleSettings");
-        int? redisPort = Utils.PropertyByName<int>(computedSimpleSettings.port, "redis");
+        var port = Utils.PropertyByName<object>(computedSimpleSettings, "port");
+        int? redisPort = Utils.PropertyByName<int>(port!, "redis");
         if (redisPort == null) throw new InvalidDataException("redisPort cannot be null");
 
         #endregion
@@ -111,11 +112,9 @@ public class ExecutorController : IExecutorController
         #endregion
     }
 
-    public Process? Process { get; private set; }
-
-    public async Task Run(ISubject<ProgressInfo>? progress = null)
+    public override async Task Run(ISubject<ProgressInfo>? progress = null)
     {
-        if (Process is { HasExited: false }) return;
+        if (IsRunning) return;
 
         #region Retrieve data from PocketBase
 
@@ -272,7 +271,7 @@ public class ExecutorController : IExecutorController
 
         #region Start server
 
-        Process = new Process
+        var startProcess = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -292,24 +291,17 @@ public class ExecutorController : IExecutorController
             name =
                 $"Starting {_executorConfiguration.type.ToString()} at port {_executorConfiguration.environmentVariables["REDIS_PORT"]}"
         });
-        Process.Start();
-
-        var standardInput = Process.StandardInput;
-
-        standardInput.Write(redisConf);
-        standardInput.Close();
+        IsRunning = true;
+        startProcess.Start();
+        await startProcess.WaitForExitAsync();
         progress?.OnCompleted();
 
         #endregion
     }
 
-    public Task Stop(ISubject<ProgressInfo>? progress = null)
+    public override Task Stop(ISubject<ProgressInfo>? progress = null)
     {
-        if (Process is { HasExited: true })
-        {
-            Process = null;
-            return Task.CompletedTask;
-        }
+        if (IsRunning) return Task.CompletedTask;
 
         #region Stop server in redis manner
 
@@ -333,15 +325,14 @@ public class ExecutorController : IExecutorController
         });
         process.Start();
         process.WaitForExit();
-        Process = null;
-
+        IsRunning = false;
         progress?.OnCompleted();
         return Task.CompletedTask;
 
         #endregion
     }
 
-    public async Task Restart(ISubject<ProgressInfo>? progress = null)
+    public override async Task Restart(ISubject<ProgressInfo>? progress = null)
     {
         #region Stop server
 
@@ -371,7 +362,7 @@ public class ExecutorController : IExecutorController
         #endregion
     }
 
-    public async Task Install(Dictionary<string, string> parameters, ISubject<ProgressInfo>? progress = null)
+    public override async Task Install(Dictionary<string, string> parameters, ISubject<ProgressInfo>? progress = null)
     {
         #region Retrieve data from PocketBase
 
@@ -429,19 +420,19 @@ public class ExecutorController : IExecutorController
         #endregion
     }
 
-    public Task Update(Dictionary<string, string> parameters, ISubject<ProgressInfo>? progress = null)
+    public override Task Update(Dictionary<string, string> parameters, ISubject<ProgressInfo>? progress = null)
     {
         progress?.OnCompleted();
         return Task.CompletedTask;
     }
 
-    public async Task InstallBySimpleSettings(dynamic simpleSettings, dynamic executorConfigurationBase,
+    public override async Task InstallBySimpleSettings(object simpleSettings, object executorConfigurationBase,
         ISubject<ProgressInfo>? progress = null)
     {
         await Install(new Dictionary<string, string>(), progress);
     }
 
-    public async Task UpdateBySimpleSettings(dynamic simpleSettings, dynamic executorConfigurationBase,
+    public override async Task UpdateBySimpleSettings(object simpleSettings, object executorConfigurationBase,
         ISubject<ProgressInfo>? progress = null)
     {
         await Update(new Dictionary<string, string>(), progress);
