@@ -131,51 +131,52 @@ public class ExecutorController : ExecutorControllerBase
 
         #endregion
 
-        #region Check file integrity
-
-        progress?.OnNext(new ProgressInfo
-        {
-            name = $"Checking file integrity of {_executorConfiguration.type.ToString()}"
-        });
-        using (var client = new HttpClient())
-        {
-            var hashesTxt = await client.GetStringAsync(redis.Hashes);
-            var hashes = Utils.ParseHashesTxt(hashesTxt);
-            var invalidFiles = Utils.CompareHashes(_executorConfiguration.binaryDirectory, hashes);
-
-            if (0 < invalidFiles.Count)
-            {
-                if (string.IsNullOrEmpty(redis.DownloadUrl))
-                    throw new InvalidDataException("DownloadUrl cannot be null or empty");
-
-                var binaryPath = Path.Combine(_executorConfiguration.binaryDirectory,
-                    Path.GetFileName(redis.DownloadUrl));
-
-                var downloadProgress = new Progress<double>();
-                downloadProgress.ProgressChanged += (_, value) =>
-                {
-                    progress?.OnNext(new ProgressInfo
-                    {
-                        name = $"Downloading {_executorConfiguration.type.ToString()} {redis.Version}",
-                        progress = value / 2.0
-                    });
-                };
-                await Download(redis.DownloadUrl, binaryPath, downloadProgress);
-
-                var extractProgress = new Progress<double>();
-                extractProgress.ProgressChanged += (_, value) =>
-                {
-                    progress?.OnNext(new ProgressInfo
-                    {
-                        name = $"Extracting {Path.GetFileName(redis.DownloadUrl)}",
-                        progress = 0.5 + value / 2.0
-                    });
-                };
-                await ExtractZip(binaryPath, extractProgress);
-            }
-        }
-
-        #endregion
+        // TODO: Too slow. Need to be optimized or find a better way to do this
+        // #region Check file integrity
+        //
+        // progress?.OnNext(new ProgressInfo
+        // {
+        //     name = $"Checking file integrity of {_executorConfiguration.type.ToString()}"
+        // });
+        // using (var client = new HttpClient())
+        // {
+        //     var hashesTxt = await client.GetStringAsync(redis.Hashes);
+        //     var hashes = Utils.ParseHashesTxt(hashesTxt);
+        //     var invalidFiles = Utils.CompareHashes(_executorConfiguration.binaryDirectory, hashes);
+        //
+        //     if (0 < invalidFiles.Count)
+        //     {
+        //         if (string.IsNullOrEmpty(redis.DownloadUrl))
+        //             throw new InvalidDataException("DownloadUrl cannot be null or empty");
+        //
+        //         var binaryPath = Path.Combine(_executorConfiguration.binaryDirectory,
+        //             Path.GetFileName(redis.DownloadUrl));
+        //
+        //         var downloadProgress = new Progress<double>();
+        //         downloadProgress.ProgressChanged += (_, value) =>
+        //         {
+        //             progress?.OnNext(new ProgressInfo
+        //             {
+        //                 name = $"Downloading {_executorConfiguration.type.ToString()} {redis.Version}",
+        //                 progress = value / 2.0
+        //             });
+        //         };
+        //         await Download(redis.DownloadUrl, binaryPath, downloadProgress);
+        //
+        //         var extractProgress = new Progress<double>();
+        //         extractProgress.ProgressChanged += (_, value) =>
+        //         {
+        //             progress?.OnNext(new ProgressInfo
+        //             {
+        //                 name = $"Extracting {Path.GetFileName(redis.DownloadUrl)}",
+        //                 progress = 0.5 + value / 2.0
+        //             });
+        //         };
+        //         await ExtractZip(binaryPath, extractProgress);
+        //     }
+        // }
+        //
+        // #endregion
 
         #region Search for currently running process and kill it
 
