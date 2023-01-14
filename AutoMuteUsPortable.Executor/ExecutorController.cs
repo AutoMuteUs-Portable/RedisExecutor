@@ -237,7 +237,6 @@ public class ExecutorController : ExecutorControllerBase
         });
         IsRunning = true;
         startProcess.Start();
-        await startProcess.WaitForExitAsync();
         progress?.OnCompleted();
 
         #endregion
