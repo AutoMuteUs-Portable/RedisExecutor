@@ -191,13 +191,17 @@ public class ExecutorController : ExecutorControllerBase
         using (var results = searcher.Get())
         {
             foreach (var result in results)
-            {
-                var processId = (uint)result["ProcessId"];
-                var process = Process.GetProcessById((int)processId);
+                try
+                {
+                    var processId = (uint)result["ProcessId"];
+                    var process = Process.GetProcessById((int)processId);
 
-                process.Kill();
-                process.WaitForExit();
-            }
+                    process.Kill();
+                    await process.WaitForExitAsync();
+                }
+                catch
+                {
+                }
         }
 
         #endregion
@@ -205,67 +209,9 @@ public class ExecutorController : ExecutorControllerBase
         #region Generate config
 
         var redisConfPath = Path.GetTempFileName();
-        var redisConf = "bind 127.0.0.1" + "\r\n" +
-                        "protected-mode yes" + "\r\n" +
-                        $"port {_executorConfiguration.environmentVariables["REDIS_PORT"]}" + "\r\n" +
-                        "tcp-backlog 511" + "\r\n" +
-                        "timeout 0" + "\r\n" +
-                        "tcp-keepalive 300" + "\r\n" +
-                        "loglevel notice" + "\r\n" +
-                        "logfile \"\"" + "\r\n" +
-                        "databases 16" + "\r\n" +
-                        "always-show-logo yes" + "\r\n" +
-                        "save 900 1" + "\r\n" +
-                        "save 300 10" + "\r\n" +
-                        "save 60 10000" + "\r\n" +
-                        "stop-writes-on-bgsave-error yes" + "\r\n" +
-                        "rdbcompression yes" + "\r\n" +
-                        "rdbchecksum yes" + "\r\n" +
-                        "dbfilename dump.rdb" + "\r\n" +
-                        "dir ./" + "\r\n" +
-                        "replica-serve-stale-data yes" + "\r\n" +
-                        "replica-read-only yes" + "\r\n" +
-                        "repl-diskless-sync no" + "\r\n" +
-                        "repl-diskless-sync-delay 5" + "\r\n" +
-                        "repl-disable-tcp-nodelay no" + "\r\n" +
-                        "replica-priority 100" + "\r\n" +
-                        "lazyfree-lazy-eviction no" + "\r\n" +
-                        "lazyfree-lazy-expire no" + "\r\n" +
-                        "lazyfree-lazy-server-del no" + "\r\n" +
-                        "replica-lazy-flush no" + "\r\n" +
-                        "appendonly no" + "\r\n" +
-                        "appendfilename \"appendonly.aof\"" + "\r\n" +
-                        "appendfsync everysec" + "\r\n" +
-                        "no-appendfsync-on-rewrite no" + "\r\n" +
-                        "auto-aof-rewrite-percentage 100" + "\r\n" +
-                        "auto-aof-rewrite-min-size 64mb" + "\r\n" +
-                        "aof-load-truncated yes" + "\r\n" +
-                        "aof-use-rdb-preamble yes" + "\r\n" +
-                        "lua-time-limit 5000" + "\r\n" +
-                        "slowlog-log-slower-than 10000" + "\r\n" +
-                        "slowlog-max-len 128" + "\r\n" +
-                        "latency-monitor-threshold 0" + "\r\n" +
-                        "notify-keyspace-events \"\"" + "\r\n" +
-                        "hash-max-ziplist-entries 512" + "\r\n" +
-                        "hash-max-ziplist-value 64" + "\r\n" +
-                        "list-max-ziplist-size -2" + "\r\n" +
-                        "list-compress-depth 0" + "\r\n" +
-                        "set-max-intset-entries 512" + "\r\n" +
-                        "zset-max-ziplist-entries 128" + "\r\n" +
-                        "zset-max-ziplist-value 64" + "\r\n" +
-                        "hll-sparse-max-bytes 3000" + "\r\n" +
-                        "stream-node-max-bytes 4096" + "\r\n" +
-                        "stream-node-max-entries 100" + "\r\n" +
-                        "activerehashing yes" + "\r\n" +
-                        "client-output-buffer-limit normal 0 0 0" + "\r\n" +
-                        "client-output-buffer-limit replica 256mb 64mb 60" + "\r\n" +
-                        "client-output-buffer-limit pubsub 32mb 8mb 60" + "\r\n" +
-                        "hz 10" + "\r\n" +
-                        "dynamic-hz yes" + "\r\n" +
-                        "aof-rewrite-incremental-fsync yes" + "\r\n" +
-                        "rdb-save-incremental-fsync yes" + "\r\n";
+        var redisConf = @"";
 
-        File.WriteAllText(redisConfPath, redisConf);
+        await File.WriteAllTextAsync(redisConfPath, redisConf);
 
         #endregion
 
@@ -276,11 +222,11 @@ public class ExecutorController : ExecutorControllerBase
             StartInfo = new ProcessStartInfo
             {
                 FileName = fileName,
-                Arguments = $"\"{redisConfPath}\"",
+                Arguments = $"\"{redisConfPath.Replace(@"\", @"\\")}\"",
                 UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                RedirectStandardInput = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
                 CreateNoWindow = true,
                 WorkingDirectory = _executorConfiguration.binaryDirectory
             }
@@ -301,7 +247,7 @@ public class ExecutorController : ExecutorControllerBase
 
     public override Task Stop(ISubject<ProgressInfo>? progress = null)
     {
-        if (IsRunning) return Task.CompletedTask;
+        if (!IsRunning) return Task.CompletedTask;
 
         #region Stop server in redis manner
 
@@ -312,8 +258,8 @@ public class ExecutorController : ExecutorControllerBase
                 FileName = Path.Combine(_executorConfiguration.binaryDirectory, "redis-cli.exe"),
                 Arguments = $"-p {_executorConfiguration.environmentVariables["REDIS_PORT"]} shutdown",
                 UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
                 CreateNoWindow = true,
                 WorkingDirectory = _executorConfiguration.binaryDirectory
             }
