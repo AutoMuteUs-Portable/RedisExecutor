@@ -225,9 +225,6 @@ public class ExecutorController : ExecutorControllerBase
                 FileName = fileName,
                 Arguments = $"\"{redisConfPath.Replace(@"\", @"\\")}\"",
                 UseShellExecute = false,
-                RedirectStandardInput = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false,
                 CreateNoWindow = true,
                 WorkingDirectory = _executorConfiguration.binaryDirectory
             }
@@ -259,8 +256,6 @@ public class ExecutorController : ExecutorControllerBase
                 FileName = Path.Combine(_executorConfiguration.binaryDirectory, "redis-cli.exe"),
                 Arguments = $"-p {_executorConfiguration.environmentVariables["REDIS_PORT"]} shutdown",
                 UseShellExecute = false,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false,
                 CreateNoWindow = true,
                 WorkingDirectory = _executorConfiguration.binaryDirectory
             }
@@ -273,6 +268,7 @@ public class ExecutorController : ExecutorControllerBase
         process.Start();
         process.WaitForExit();
         IsRunning = false;
+        OnStop();
         progress?.OnCompleted();
         return Task.CompletedTask;
 
