@@ -17,8 +17,8 @@ public class ExecutorController : ExecutorControllerBase
 {
     public new static Dictionary<string, Parameter> InstallParameters = new();
     public new static Dictionary<string, Parameter> UpdateParameters = new();
-    private readonly ExecutorConfiguration _executorConfiguration;
     private readonly PocketBaseClientApplication _pocketBaseClientApplication = new();
+    public readonly ExecutorConfiguration ExecutorConfiguration;
 
     public ExecutorController(object executorConfiguration) : base(executorConfiguration)
     {
@@ -58,7 +58,7 @@ public class ExecutorController : ExecutorControllerBase
         var validator = new ExecutorConfigurationValidator();
         validator.ValidateAndThrow(tmp);
 
-        _executorConfiguration = tmp;
+        ExecutorConfiguration = tmp;
 
         #endregion
     }
@@ -107,7 +107,7 @@ public class ExecutorController : ExecutorControllerBase
         var validator = new ExecutorConfigurationValidator();
         validator.ValidateAndThrow(executorConfiguration);
 
-        _executorConfiguration = executorConfiguration;
+        ExecutorConfiguration = executorConfiguration;
 
         #endregion
     }
@@ -120,10 +120,10 @@ public class ExecutorController : ExecutorControllerBase
 
         var redis =
             _pocketBaseClientApplication.Data.RedisCollection.FirstOrDefault(x =>
-                x.Version == _executorConfiguration.binaryVersion);
+                x.Version == ExecutorConfiguration.binaryVersion);
         if (redis == null)
             throw new InvalidDataException(
-                $"{_executorConfiguration.type.ToString()} {_executorConfiguration.binaryVersion} is not found in the database");
+                $"{ExecutorConfiguration.type.ToString()} {ExecutorConfiguration.binaryVersion} is not found in the database");
         // TODO: This doesn't work due to a bug of PocketBaseClient-csharp
         // if (redis.CompatibleExecutors.All(x => x.Version != _executorConfiguration.version))
         //     throw new InvalidDataException(
@@ -180,11 +180,11 @@ public class ExecutorController : ExecutorControllerBase
 
         #region Search for currently running process and kill it
 
-        var fileName = Path.Combine(_executorConfiguration.binaryDirectory, "redis-server.exe");
+        var fileName = Path.Combine(ExecutorConfiguration.binaryDirectory, "redis-server.exe");
 
         progress?.OnNext(new ProgressInfo
         {
-            name = $"Checking currently running {_executorConfiguration.type.ToString()}"
+            name = $"Checking currently running {ExecutorConfiguration.type.ToString()}"
         });
         var wmiQueryString =
             $"SELECT ProcessId FROM Win32_Process WHERE ExecutablePath = '{fileName.Replace(@"\", @"\\")}'";
@@ -226,14 +226,14 @@ public class ExecutorController : ExecutorControllerBase
                 Arguments = $"\"{redisConfPath.Replace(@"\", @"\\")}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _executorConfiguration.binaryDirectory
+                WorkingDirectory = ExecutorConfiguration.binaryDirectory
             }
         };
 
         progress?.OnNext(new ProgressInfo
         {
             name =
-                $"Starting {_executorConfiguration.type.ToString()} at port {_executorConfiguration.environmentVariables["REDIS_PORT"]}"
+                $"Starting {ExecutorConfiguration.type.ToString()} at port {ExecutorConfiguration.environmentVariables["REDIS_PORT"]}"
         });
         IsRunning = true;
         startProcess.Start();
@@ -252,17 +252,17 @@ public class ExecutorController : ExecutorControllerBase
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = Path.Combine(_executorConfiguration.binaryDirectory, "redis-cli.exe"),
-                Arguments = $"-p {_executorConfiguration.environmentVariables["REDIS_PORT"]} shutdown",
+                FileName = Path.Combine(ExecutorConfiguration.binaryDirectory, "redis-cli.exe"),
+                Arguments = $"-p {ExecutorConfiguration.environmentVariables["REDIS_PORT"]} shutdown",
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _executorConfiguration.binaryDirectory
+                WorkingDirectory = ExecutorConfiguration.binaryDirectory
             }
         };
 
         progress?.OnNext(new ProgressInfo
         {
-            name = $"Stopping {_executorConfiguration.type.ToString()}"
+            name = $"Stopping {ExecutorConfiguration.type.ToString()}"
         });
         process.Start();
         process.WaitForExit();
@@ -311,10 +311,10 @@ public class ExecutorController : ExecutorControllerBase
 
         var redis =
             _pocketBaseClientApplication.Data.RedisCollection.FirstOrDefault(x =>
-                x.Version == _executorConfiguration.binaryVersion);
+                x.Version == ExecutorConfiguration.binaryVersion);
         if (redis == null)
             throw new InvalidDataException(
-                $"{_executorConfiguration.type.ToString()} {_executorConfiguration.binaryVersion} is not found in the database");
+                $"{ExecutorConfiguration.type.ToString()} {ExecutorConfiguration.binaryVersion} is not found in the database");
         // TODO: This doesn't work due to a bug of PocketBaseClient-csharp
         // if (redis.CompatibleExecutors.All(x => x.Version != _executorConfiguration.version))
         //     throw new InvalidDataException(
@@ -326,10 +326,10 @@ public class ExecutorController : ExecutorControllerBase
 
         #region Download
 
-        if (!Directory.Exists(_executorConfiguration.binaryDirectory))
-            Directory.CreateDirectory(_executorConfiguration.binaryDirectory);
+        if (!Directory.Exists(ExecutorConfiguration.binaryDirectory))
+            Directory.CreateDirectory(ExecutorConfiguration.binaryDirectory);
 
-        var binaryPath = Path.Combine(_executorConfiguration.binaryDirectory,
+        var binaryPath = Path.Combine(ExecutorConfiguration.binaryDirectory,
             Path.GetFileName(redis.DownloadUrl));
 
         var downloadProgress = new Progress<double>();
@@ -337,7 +337,7 @@ public class ExecutorController : ExecutorControllerBase
         {
             progress?.OnNext(new ProgressInfo
             {
-                name = $"Downloading {_executorConfiguration.type.ToString()} {redis.Version}",
+                name = $"Downloading {ExecutorConfiguration.type.ToString()} {redis.Version}",
                 progress = value / 2.0
             });
         };
