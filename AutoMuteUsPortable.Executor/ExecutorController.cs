@@ -2,7 +2,9 @@
 using System.IO.Compression;
 using System.Management;
 using System.Reactive.Subjects;
+using System.Runtime.InteropServices;
 using AutoMuteUsPortable.PocketBaseClient;
+using AutoMuteUsPortable.PocketBaseClient.Models;
 using AutoMuteUsPortable.Shared.Controller.Executor;
 using AutoMuteUsPortable.Shared.Entity.ExecutorConfigurationBaseNS;
 using AutoMuteUsPortable.Shared.Entity.ExecutorConfigurationNS;
@@ -316,7 +318,8 @@ public class ExecutorController : ExecutorControllerBase
         // if (redis.CompatibleExecutors.All(x => x.Version != _executorConfiguration.version))
         //     throw new InvalidDataException(
         //         $"{_executorConfiguration.type.ToString()} {_executorConfiguration.binaryVersion} is not compatible with Executor {_executorConfiguration.version}");
-        if (string.IsNullOrEmpty(redis.DownloadUrl))
+        var downloadUrl = GetDownloadUrl(redis.DownloadUrl);
+        if (string.IsNullOrEmpty(downloadUrl))
             throw new InvalidDataException("DownloadUrl cannot be null or empty");
 
         #endregion
@@ -327,7 +330,7 @@ public class ExecutorController : ExecutorControllerBase
             Directory.CreateDirectory(ExecutorConfiguration.binaryDirectory);
 
         var binaryPath = Path.Combine(ExecutorConfiguration.binaryDirectory,
-            Path.GetFileName(redis.DownloadUrl));
+            Path.GetFileName(downloadUrl));
 
         var downloadProgress = new Progress<double>();
         downloadProgress.ProgressChanged += (_, value) =>
@@ -338,7 +341,7 @@ public class ExecutorController : ExecutorControllerBase
                 progress = value / 2.0
             });
         };
-        await Download(redis.DownloadUrl, binaryPath, downloadProgress);
+        await Download(downloadUrl, binaryPath, downloadProgress);
 
         #endregion
 
@@ -349,7 +352,7 @@ public class ExecutorController : ExecutorControllerBase
         {
             progress?.OnNext(new ProgressInfo
             {
-                name = $"Extracting {Path.GetFileName(redis.DownloadUrl)}",
+                name = $"Extracting {Path.GetFileName(downloadUrl)}",
                 progress = 0.5 + value / 2.0
             });
         };
@@ -385,6 +388,25 @@ public class ExecutorController : ExecutorControllerBase
         using (var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
         {
             await client.DownloadDataAsync(url, fileStream, progress);
+        }
+    }
+
+    private string? GetDownloadUrl(DownloadUrl? downloadUrl)
+    {
+        var arch = RuntimeInformation.ProcessArchitecture;
+
+        switch (arch)
+        {
+            case Architecture.Arm:
+                return downloadUrl?.WinArm;
+            case Architecture.Arm64:
+                return downloadUrl?.WinArm64;
+            case Architecture.X86:
+                return downloadUrl?.WinX86;
+            case Architecture.X64:
+                return downloadUrl?.WinX64;
+            default:
+                throw new InvalidDataException($"{arch.ToString()} is not supported");
         }
     }
 }
