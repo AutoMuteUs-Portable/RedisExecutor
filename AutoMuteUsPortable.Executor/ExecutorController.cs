@@ -362,7 +362,8 @@ public class ExecutorController : ExecutorControllerBase
     }
 
     public override Task Update(
-        Dictionary<ExecutorType, ExecutorControllerBase> executors, ISubject<ProgressInfo>? progress = null)
+        Dictionary<ExecutorType, ExecutorControllerBase> executors, object oldExecutorConfiguration,
+        ISubject<ProgressInfo>? progress = null)
     {
         progress?.OnCompleted();
         return Task.CompletedTask;
