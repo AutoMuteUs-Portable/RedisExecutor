@@ -182,13 +182,15 @@ public class ExecutorController : ExecutorControllerBase
 
                 var downloadProgress = taskProgress?.GetProgress();
                 if (taskProgress?.ActiveLeafTask != null)
-                    taskProgress.ActiveLeafTask.Name = string.Format("{0}をダウンロードしています", Path.GetFileName(downloadUrl));
+                    taskProgress.ActiveLeafTask.Name =
+                        string.Format("{0}の実行に必要なファイルをダウンロードしています", ExecutorConfiguration.type);
                 await Utils.DownloadAsync(downloadUrl, binaryPath, downloadProgress);
                 taskProgress?.NextTask();
 
                 var extractProgress = taskProgress?.GetProgress();
                 if (taskProgress?.ActiveLeafTask != null)
-                    taskProgress.ActiveLeafTask.Name = string.Format("{0}を解凍しています", Path.GetFileName(downloadUrl));
+                    taskProgress.ActiveLeafTask.Name =
+                        string.Format("{0}の実行に必要なファイルを解凍しています", ExecutorConfiguration.type);
                 Utils.ExtractZip(binaryPath, extractProgress);
                 taskProgress?.NextTask();
             }
@@ -376,7 +378,7 @@ public class ExecutorController : ExecutorControllerBase
 
         var downloadProgress = taskProgress?.GetProgress();
         if (taskProgress?.ActiveLeafTask != null)
-            taskProgress.ActiveLeafTask.Name = string.Format("{0}をダウンロードしています", Path.GetFileName(downloadUrl));
+            taskProgress.ActiveLeafTask.Name = string.Format("{0}の実行に必要なファイルをダウンロードしています", ExecutorConfiguration.type);
         await Utils.DownloadAsync(downloadUrl, binaryPath, downloadProgress);
         taskProgress?.NextTask();
 
@@ -386,7 +388,7 @@ public class ExecutorController : ExecutorControllerBase
 
         var extractProgress = taskProgress?.GetProgress();
         if (taskProgress?.ActiveLeafTask != null)
-            taskProgress.ActiveLeafTask.Name = string.Format("{0}を解凍しています", Path.GetFileName(downloadUrl));
+            taskProgress.ActiveLeafTask.Name = string.Format("{0}の実行に必要なファイルを解凍しています", ExecutorConfiguration.type);
         Utils.ExtractZip(binaryPath, extractProgress);
         taskProgress?.NextTask();
 
