@@ -144,10 +144,10 @@ public class ExecutorController : ExecutorControllerBase
                 x.Version == ExecutorConfiguration.binaryVersion);
         if (redis == null)
             throw new InvalidDataException(
-                $"{ExecutorConfiguration.type.ToString()} {ExecutorConfiguration.binaryVersion} is not found in the database");
+                $"{ExecutorConfiguration.type} {ExecutorConfiguration.binaryVersion} is not found in the database");
         if (redis.CompatibleExecutors.All(x => x.Version != ExecutorConfiguration.version))
             throw new InvalidDataException(
-                $"{ExecutorConfiguration.type.ToString()} {ExecutorConfiguration.binaryVersion} is not compatible with Executor {ExecutorConfiguration.version}");
+                $"{ExecutorConfiguration.type} {ExecutorConfiguration.binaryVersion} is not compatible with Executor {ExecutorConfiguration.version}");
 
         #endregion
 
@@ -155,7 +155,7 @@ public class ExecutorController : ExecutorControllerBase
 
         progress?.OnNext(new ProgressInfo
         {
-            name = $"Checking file integrity of {ExecutorConfiguration.type.ToString()}"
+            name = $"Checking file integrity of {ExecutorConfiguration.type}"
         });
         using (var client = new HttpClient())
         {
@@ -303,6 +303,8 @@ public class ExecutorController : ExecutorControllerBase
 
     public override async Task Restart(ISubject<ProgressInfo>? progress = null)
     {
+        if (!IsRunning) return;
+
         #region Setup progress
 
         var taskProgress = progress != null
@@ -354,10 +356,10 @@ public class ExecutorController : ExecutorControllerBase
                 x.Version == ExecutorConfiguration.binaryVersion);
         if (redis == null)
             throw new InvalidDataException(
-                $"{ExecutorConfiguration.type.ToString()} {ExecutorConfiguration.binaryVersion} is not found in the database");
+                $"{ExecutorConfiguration.type} {ExecutorConfiguration.binaryVersion} is not found in the database");
         if (redis.CompatibleExecutors.All(x => x.Version != ExecutorConfiguration.version))
             throw new InvalidDataException(
-                $"{ExecutorConfiguration.type.ToString()} {ExecutorConfiguration.binaryVersion} is not compatible with Executor {ExecutorConfiguration.version}");
+                $"{ExecutorConfiguration.type} {ExecutorConfiguration.binaryVersion} is not compatible with Executor {ExecutorConfiguration.version}");
         var downloadUrl = Utils.GetDownloadUrl(redis.DownloadUrl);
         if (string.IsNullOrEmpty(downloadUrl))
             throw new InvalidDataException("DownloadUrl cannot be null or empty");
