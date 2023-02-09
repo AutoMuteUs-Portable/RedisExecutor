@@ -153,10 +153,6 @@ public class ExecutorController : ExecutorControllerBase
 
         #region Check file integrity
 
-        progress?.OnNext(new ProgressInfo
-        {
-            name = $"Checking file integrity of {ExecutorConfiguration.type}"
-        });
         using (var client = new HttpClient())
         {
             var checksumUrl = Utils.GetChecksum(redis.Checksum);
