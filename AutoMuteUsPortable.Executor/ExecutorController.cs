@@ -237,7 +237,6 @@ public class ExecutorController : ExecutorControllerBase
                     var process = Process.GetProcessById((int)processId);
 
                     process.Kill();
-                    await process.WaitForExitAsync();
                 }
                 catch
                 {
