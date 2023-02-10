@@ -14,9 +14,19 @@ namespace AutoMuteUsPortable.Executor;
 public class ExecutorController : ExecutorControllerBase
 {
     private readonly PocketBaseClientApplication _pocketBaseClientApplication = new();
+    private Process? _process;
+    private readonly StreamWriter _outputStreamWriter;
+    private readonly StreamWriter _errorStreamWriter;
 
     public ExecutorController(object executorConfiguration) : base(executorConfiguration)
     {
+        #region Initialize stream writer
+
+        _outputStreamWriter = new StreamWriter(OutputStream);
+        _errorStreamWriter = new StreamWriter(ErrorStream);
+
+        #endregion
+
         #region Check variables
 
         var binaryDirectory = Utils.PropertyByName<string>(executorConfiguration, "binaryDirectory");
@@ -61,6 +71,13 @@ public class ExecutorController : ExecutorControllerBase
     public ExecutorController(object computedSimpleSettings,
         object executorConfigurationBase) : base(computedSimpleSettings, executorConfigurationBase)
     {
+        #region Initialize stream writer
+
+        _outputStreamWriter = new StreamWriter(OutputStream);
+        _errorStreamWriter = new StreamWriter(ErrorStream);
+
+        #endregion
+
         #region Check variables
 
         var binaryDirectory = Utils.PropertyByName<string>(executorConfigurationBase, "binaryDirectory");
@@ -242,7 +259,7 @@ public class ExecutorController : ExecutorControllerBase
 
         #region Start server
 
-        var startProcess = new Process
+        _process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -250,9 +267,14 @@ public class ExecutorController : ExecutorControllerBase
                 Arguments = $"\"{redisConfPath.Replace(@"\", @"\\")}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 WorkingDirectory = ExecutorConfiguration.binaryDirectory
             }
         };
+
+        IsRunning = true;
+        _process.Exited += (_, _) => { OnStop(); };
 
         var startProgress = taskProgress?.GetSubjectProgress();
         startProgress?.OnNext(new ProgressInfo
@@ -260,8 +282,14 @@ public class ExecutorController : ExecutorControllerBase
             name = string.Format("{0}を起動しています", ExecutorConfiguration.type),
             IsIndeterminate = true
         });
-        IsRunning = true;
-        startProcess.Start();
+        _process.Start();
+
+        _process.OutputDataReceived += ProcessOnOutputDataReceived;
+        _process.BeginOutputReadLine();
+
+        _process.ErrorDataReceived += ProcessOnErrorDataReceived;
+        _process.BeginErrorReadLine();
+
         taskProgress?.NextTask();
 
         #endregion
@@ -292,8 +320,6 @@ public class ExecutorController : ExecutorControllerBase
         });
         process.Start();
         process.WaitForExit();
-        IsRunning = false;
-        OnStop();
         return Task.CompletedTask;
 
         #endregion
@@ -396,5 +422,21 @@ public class ExecutorController : ExecutorControllerBase
         ISubject<ProgressInfo>? progress = null)
     {
         return Task.CompletedTask;
+    }
+
+    protected override void OnStop()
+    {
+        base.OnStop();
+        IsRunning = false;
+    }
+
+    private void ProcessOnOutputDataReceived(object sender, DataReceivedEventArgs e)
+    {
+        _outputStreamWriter.Write(e.Data);
+    }
+
+    private void ProcessOnErrorDataReceived(object sender, DataReceivedEventArgs e)
+    {
+        _errorStreamWriter.Write(e.Data);
     }
 }
