@@ -285,9 +285,10 @@ public class ExecutorController : ExecutorControllerBase
                 WorkingDirectory = ExecutorConfiguration.binaryDirectory
             }
         };
-
-        OnStart();
+        _process.OutputDataReceived += ProcessOnOutputDataReceived;
+        _process.ErrorDataReceived += ProcessOnErrorDataReceived;
         _process.Exited += (_, _) => { OnStop(); };
+        _process.EnableRaisingEvents = true;
 
         var startProgress = taskProgress?.GetSubjectProgress();
         startProgress?.OnNext(new ProgressInfo
@@ -295,12 +296,10 @@ public class ExecutorController : ExecutorControllerBase
             name = string.Format("{0}を起動しています", ExecutorConfiguration.type),
             IsIndeterminate = true
         });
+        OnStart();
         _process.Start();
 
-        _process.OutputDataReceived += ProcessOnOutputDataReceived;
         _process.BeginOutputReadLine();
-
-        _process.ErrorDataReceived += ProcessOnErrorDataReceived;
         _process.BeginErrorReadLine();
 
         taskProgress?.NextTask();
@@ -322,9 +321,15 @@ public class ExecutorController : ExecutorControllerBase
                 Arguments = $"-p {ExecutorConfiguration.environmentVariables["REDIS_PORT"]} shutdown",
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 WorkingDirectory = ExecutorConfiguration.binaryDirectory
             }
         };
+        _process.OutputDataReceived += ProcessOnOutputDataReceived;
+        _process.ErrorDataReceived += ProcessOnErrorDataReceived;
+        _process.Exited += (_, _) => { OnStop(); };
+        _process.EnableRaisingEvents = true;
 
         progress?.OnNext(new ProgressInfo
         {
@@ -332,6 +337,10 @@ public class ExecutorController : ExecutorControllerBase
             IsIndeterminate = true
         });
         process.Start();
+
+        _process.BeginOutputReadLine();
+        _process.BeginErrorReadLine();
+
         process.WaitForExit();
         return Task.CompletedTask;
 
