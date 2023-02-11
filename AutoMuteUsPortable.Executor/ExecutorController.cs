@@ -326,10 +326,9 @@ public class ExecutorController : ExecutorControllerBase
                 WorkingDirectory = ExecutorConfiguration.binaryDirectory
             }
         };
-        _process.OutputDataReceived += ProcessOnOutputDataReceived;
-        _process.ErrorDataReceived += ProcessOnErrorDataReceived;
-        _process.Exited += (_, _) => { OnStop(); };
-        _process.EnableRaisingEvents = true;
+        process.OutputDataReceived += ProcessOnOutputDataReceived;
+        process.ErrorDataReceived += ProcessOnErrorDataReceived;
+        process.EnableRaisingEvents = true;
 
         progress?.OnNext(new ProgressInfo
         {
@@ -338,8 +337,8 @@ public class ExecutorController : ExecutorControllerBase
         });
         process.Start();
 
-        _process.BeginOutputReadLine();
-        _process.BeginErrorReadLine();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
 
         process.WaitForExit();
         return Task.CompletedTask;
