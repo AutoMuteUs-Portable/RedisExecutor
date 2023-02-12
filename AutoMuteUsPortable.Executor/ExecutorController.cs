@@ -112,7 +112,7 @@ public class ExecutorController : ExecutorControllerBase
             binaryDirectory = binaryDirectory,
             environmentVariables = new Dictionary<string, string>
             {
-                { "REDIS_PORT", redisPort.ToString() ?? "" }
+                ["REDIS_PORT"] = redisPort.ToString() ?? ""
             }
         };
 
@@ -133,22 +133,14 @@ public class ExecutorController : ExecutorControllerBase
         var taskProgress = progress != null
             ? new TaskProgress(progress, new Dictionary<string, object?>
             {
+                ["File integrity check"] = new List<string>
                 {
-                    "File integrity check", new List<string>
-                    {
-                        "Checking file integrity",
-                        "Downloading",
-                        "Extracting"
-                    }
+                    "Checking file integrity",
+                    "Downloading",
+                    "Extracting"
                 },
-                {
-                    "Killing currently running server",
-                    null
-                },
-                {
-                    "Starting server",
-                    null
-                }
+                ["Killing currently running server"] = null,
+                ["Starting server"] = null
             })
             : null;
 
@@ -385,10 +377,10 @@ public class ExecutorController : ExecutorControllerBase
         #region Setup progress
 
         var taskProgress = progress != null
-            ? new TaskProgress(progress, new Dictionary<string, object?>
+            ? new TaskProgress(progress, new List<string>
             {
-                { "Downloading", null },
-                { "Extracting", null }
+                "Downloading",
+                "Extracting"
             })
             : null;
 
