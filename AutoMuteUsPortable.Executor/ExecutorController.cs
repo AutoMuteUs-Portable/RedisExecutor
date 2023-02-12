@@ -7,6 +7,8 @@ using AutoMuteUsPortable.Shared.Entity.ExecutorConfigurationBaseNS;
 using AutoMuteUsPortable.Shared.Entity.ExecutorConfigurationNS;
 using AutoMuteUsPortable.Shared.Entity.ProgressInfo;
 using AutoMuteUsPortable.Shared.Utility;
+using CliWrap;
+using CliWrap.EventStream;
 using FluentValidation;
 
 namespace AutoMuteUsPortable.Executor;
@@ -16,7 +18,8 @@ public class ExecutorController : ExecutorControllerBase
     private readonly StreamWriter _errorStreamWriter;
     private readonly StreamWriter _outputStreamWriter;
     private readonly PocketBaseClientApplication _pocketBaseClientApplication = new();
-    private Process? _process;
+    private CancellationTokenSource _forcefulCTS = new();
+    private CancellationTokenSource _gracefulCTS = new();
 
     public ExecutorController(object executorConfiguration) : base(executorConfiguration)
     {
@@ -246,6 +249,7 @@ public class ExecutorController : ExecutorControllerBase
                 }
                 catch
                 {
+                    // ignored
                 }
         }
 
@@ -264,76 +268,69 @@ public class ExecutorController : ExecutorControllerBase
 
         #region Start server
 
-        _process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = $"\"{redisConfPath.Replace(@"\", @"\\")}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                WorkingDirectory = ExecutorConfiguration.binaryDirectory
-            }
-        };
-        _process.OutputDataReceived += ProcessOnOutputDataReceived;
-        _process.ErrorDataReceived += ProcessOnErrorDataReceived;
-        _process.Exited += (_, _) => { OnStop(); };
-        _process.EnableRaisingEvents = true;
-
         var startProgress = taskProgress?.GetSubjectProgress();
         startProgress?.OnNext(new ProgressInfo
         {
             name = string.Format("{0}を起動しています", ExecutorConfiguration.type),
             IsIndeterminate = true
         });
-        OnStart();
-        _process.Start();
+        var cmd = Cli.Wrap(fileName)
+            .WithArguments($"\"{redisConfPath.Replace(@"\", @"\\")}\"")
+            .WithWorkingDirectory(ExecutorConfiguration.binaryDirectory)
+            .WithStandardOutputPipe(PipeTarget.ToDelegate(ProcessStandardOutput))
+            .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError));
 
-        _process.BeginOutputReadLine();
-        _process.BeginErrorReadLine();
+        _forcefulCTS = new CancellationTokenSource();
+        _gracefulCTS = new CancellationTokenSource();
+        try
+        {
+            cmd.Observe(Console.OutputEncoding, Console.OutputEncoding, _forcefulCTS.Token, _gracefulCTS.Token)
+                .Subscribe(
+                    e =>
+                    {
+                        switch (e)
+                        {
+                            case StartedCommandEvent started:
+                                OnStart();
+                                break;
+                            case ExitedCommandEvent exited:
+                                OnStop();
+                                break;
+                        }
+                    }, _ => OnStop(), OnStop);
+        }
+        catch (OperationCanceledException ex)
+        {
+            // ignored
+        }
+        catch
+        {
+            // ignored
+            // TODO: handle exception more elegantly
+        }
 
         taskProgress?.NextTask();
 
         #endregion
     }
 
-    public override Task Stop(ISubject<ProgressInfo>? progress = null)
+    public override async Task Stop(ISubject<ProgressInfo>? progress = null)
     {
-        if (!IsRunning) return Task.CompletedTask;
+        if (!IsRunning) return;
 
         #region Stop server in redis manner
-
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = Path.Combine(ExecutorConfiguration.binaryDirectory, "redis-cli.exe"),
-                Arguments = $"-p {ExecutorConfiguration.environmentVariables["REDIS_PORT"]} shutdown",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                WorkingDirectory = ExecutorConfiguration.binaryDirectory
-            }
-        };
-        process.OutputDataReceived += ProcessOnOutputDataReceived;
-        process.ErrorDataReceived += ProcessOnErrorDataReceived;
-        process.EnableRaisingEvents = true;
 
         progress?.OnNext(new ProgressInfo
         {
             name = string.Format("{0}を終了しています", ExecutorConfiguration.type),
             IsIndeterminate = true
         });
-        process.Start();
-
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        process.WaitForExit();
-        return Task.CompletedTask;
+        await Cli.Wrap(Path.Combine(ExecutorConfiguration.binaryDirectory, "redis-cli.exe"))
+            .WithArguments($"-p {ExecutorConfiguration.environmentVariables["REDIS_PORT"]} shutdown")
+            .WithWorkingDirectory(ExecutorConfiguration.binaryDirectory)
+            .WithStandardOutputPipe(PipeTarget.ToDelegate(ProcessStandardOutput))
+            .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError))
+            .ExecuteAsync();
 
         #endregion
     }
@@ -437,13 +434,13 @@ public class ExecutorController : ExecutorControllerBase
         return Task.CompletedTask;
     }
 
-    private void ProcessOnOutputDataReceived(object sender, DataReceivedEventArgs e)
+    private void ProcessStandardOutput(string text)
     {
-        _outputStreamWriter.Write(e.Data);
+        _outputStreamWriter.Write(text);
     }
 
-    private void ProcessOnErrorDataReceived(object sender, DataReceivedEventArgs e)
+    private void ProcessStandardError(string text)
     {
-        _errorStreamWriter.Write(e.Data);
+        _errorStreamWriter.Write(text);
     }
 }
