@@ -111,7 +111,8 @@ public class ExecutorController : ExecutorControllerBase
         #endregion
     }
 
-    public override async Task Run(ISubject<ProgressInfo>? progress = null)
+    public override async Task Run(ISubject<ProgressInfo>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         if (IsRunning) return;
 
@@ -165,7 +166,7 @@ public class ExecutorController : ExecutorControllerBase
         {
             using (var client = new HttpClient())
             {
-                var res = await client.GetStringAsync(checksumUrl);
+                var res = await client.GetStringAsync(checksumUrl, cancellationToken);
                 var checksum = Utils.ParseChecksumText(res);
                 var checksumProgress = taskProgress?.GetSubjectProgress();
                 checksumProgress?.OnNext(new ProgressInfo
@@ -173,7 +174,7 @@ public class ExecutorController : ExecutorControllerBase
                     name = string.Format("{0}のファイルの整合性を確認しています", ExecutorConfiguration.type),
                     IsIndeterminate = true
                 });
-                var invalidFiles = Utils.CompareChecksum(ExecutorConfiguration.binaryDirectory, checksum);
+                var invalidFiles = Utils.CompareChecksum(ExecutorConfiguration.binaryDirectory, checksum, cancellationToken);
                 taskProgress?.NextTask();
 
                 if (0 < invalidFiles.Count)
@@ -189,14 +190,14 @@ public class ExecutorController : ExecutorControllerBase
                     if (taskProgress?.ActiveLeafTask != null)
                         taskProgress.ActiveLeafTask.Name =
                             string.Format("{0}の実行に必要なファイルをダウンロードしています", ExecutorConfiguration.type);
-                    await Utils.DownloadAsync(downloadUrl, binaryPath, downloadProgress);
+                    await Utils.DownloadAsync(downloadUrl, binaryPath, downloadProgress, cancellationToken);
                     taskProgress?.NextTask();
 
                     var extractProgress = taskProgress?.GetProgress();
                     if (taskProgress?.ActiveLeafTask != null)
                         taskProgress.ActiveLeafTask.Name =
                             string.Format("{0}の実行に必要なファイルを解凍しています", ExecutorConfiguration.type);
-                    Utils.ExtractZip(binaryPath, extractProgress);
+                    Utils.ExtractZip(binaryPath, extractProgress, cancellationToken);
                     taskProgress?.NextTask();
                 }
                 else
@@ -224,6 +225,7 @@ public class ExecutorController : ExecutorControllerBase
         using (var results = searcher.Get())
         {
             foreach (var result in results)
+            {
                 try
                 {
                     var processId = (uint)result["ProcessId"];
@@ -235,6 +237,9 @@ public class ExecutorController : ExecutorControllerBase
                 {
                     // ignored
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
+            }
         }
 
         taskProgress?.NextTask();
@@ -246,7 +251,7 @@ public class ExecutorController : ExecutorControllerBase
         var redisConfPath = Path.GetTempFileName();
         var redisConf = @"";
 
-        await File.WriteAllTextAsync(redisConfPath, redisConf);
+        await File.WriteAllTextAsync(redisConfPath, redisConf, cancellationToken);
 
         #endregion
 
@@ -265,10 +270,11 @@ public class ExecutorController : ExecutorControllerBase
             .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError));
 
         _forcefulCTS = new CancellationTokenSource();
+        var linkedForcefulCTS = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _forcefulCTS.Token);
         _gracefulCTS = new CancellationTokenSource();
         try
         {
-            cmd.Observe(Console.OutputEncoding, Console.OutputEncoding, _forcefulCTS.Token, _gracefulCTS.Token)
+            cmd.Observe(Console.OutputEncoding, Console.OutputEncoding, linkedForcefulCTS.Token, _gracefulCTS.Token)
                 .Subscribe(
                     e =>
                     {
@@ -298,7 +304,8 @@ public class ExecutorController : ExecutorControllerBase
         #endregion
     }
 
-    public override async Task Stop(ISubject<ProgressInfo>? progress = null)
+    public override async Task GracefullyStop(ISubject<ProgressInfo>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         if (!IsRunning) return;
 
@@ -314,12 +321,35 @@ public class ExecutorController : ExecutorControllerBase
             .WithWorkingDirectory(ExecutorConfiguration.binaryDirectory)
             .WithStandardOutputPipe(PipeTarget.ToDelegate(ProcessStandardOutput))
             .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError))
-            .ExecuteAsync();
+            .ExecuteAsync(cancellationToken);
 
         #endregion
     }
 
-    public override async Task Restart(ISubject<ProgressInfo>? progress = null)
+    public override Task ForciblyStop(ISubject<ProgressInfo>? progress = null)
+    {
+        if (!IsRunning) return Task.CompletedTask;
+
+        #region Stop server
+
+        var ewh = new AutoResetEvent(false);
+        Stopped += (sender, args) => ewh.Set();
+
+        progress?.OnNext(new ProgressInfo
+        {
+            name = string.Format("{0}を終了しています", ExecutorConfiguration.type),
+            IsIndeterminate = true
+        });
+        _forcefulCTS.Cancel();
+        ewh.WaitOne();
+
+        return Task.CompletedTask;
+
+        #endregion
+    }
+
+    public override async Task Restart(ISubject<ProgressInfo>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         if (!IsRunning) return;
 
@@ -338,7 +368,7 @@ public class ExecutorController : ExecutorControllerBase
         #region Stop server
 
         var stopProgress = taskProgress?.GetSubjectProgress();
-        await Stop(stopProgress);
+        await GracefullyStop(stopProgress, cancellationToken);
         taskProgress?.NextTask();
 
         #endregion
@@ -346,14 +376,15 @@ public class ExecutorController : ExecutorControllerBase
         #region Start server
 
         var runProgress = taskProgress?.GetSubjectProgress();
-        await Run(runProgress);
+        await Run(runProgress, cancellationToken);
         taskProgress?.NextTask();
 
         #endregion
     }
 
     public override async Task Install(
-        Dictionary<ExecutorType, ExecutorControllerBase> executors, ISubject<ProgressInfo>? progress = null)
+        Dictionary<ExecutorType, ExecutorControllerBase> executors, ISubject<ProgressInfo>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         #region Setup progress
 
@@ -395,7 +426,7 @@ public class ExecutorController : ExecutorControllerBase
         var downloadProgress = taskProgress?.GetProgress();
         if (taskProgress?.ActiveLeafTask != null)
             taskProgress.ActiveLeafTask.Name = string.Format("{0}の実行に必要なファイルをダウンロードしています", ExecutorConfiguration.type);
-        await Utils.DownloadAsync(downloadUrl, binaryPath, downloadProgress);
+        await Utils.DownloadAsync(downloadUrl, binaryPath, downloadProgress, cancellationToken);
         taskProgress?.NextTask();
 
         #endregion
@@ -405,7 +436,7 @@ public class ExecutorController : ExecutorControllerBase
         var extractProgress = taskProgress?.GetProgress();
         if (taskProgress?.ActiveLeafTask != null)
             taskProgress.ActiveLeafTask.Name = string.Format("{0}の実行に必要なファイルを解凍しています", ExecutorConfiguration.type);
-        Utils.ExtractZip(binaryPath, extractProgress);
+        Utils.ExtractZip(binaryPath, extractProgress, cancellationToken);
         taskProgress?.NextTask();
 
         #endregion
@@ -413,7 +444,7 @@ public class ExecutorController : ExecutorControllerBase
 
     public override Task Update(
         Dictionary<ExecutorType, ExecutorControllerBase> executors, object oldExecutorConfiguration,
-        ISubject<ProgressInfo>? progress = null)
+        ISubject<ProgressInfo>? progress = null, CancellationToken cancellationToken = default)
     {
         return Task.CompletedTask;
     }
