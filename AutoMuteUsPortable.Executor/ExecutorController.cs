@@ -174,7 +174,8 @@ public class ExecutorController : ExecutorControllerBase
                     name = string.Format("{0}のファイルの整合性を確認しています", ExecutorConfiguration.type),
                     IsIndeterminate = true
                 });
-                var invalidFiles = Utils.CompareChecksum(ExecutorConfiguration.binaryDirectory, checksum, cancellationToken);
+                var invalidFiles =
+                    Utils.CompareChecksum(ExecutorConfiguration.binaryDirectory, checksum, cancellationToken);
                 taskProgress?.NextTask();
 
                 if (0 < invalidFiles.Count)
@@ -278,16 +279,12 @@ public class ExecutorController : ExecutorControllerBase
                 .Subscribe(
                     e =>
                     {
-                        switch (e)
-                        {
-                            case StartedCommandEvent started:
-                                OnStart();
-                                break;
-                            case ExitedCommandEvent exited:
-                                OnStop();
-                                break;
-                        }
-                    }, _ => OnStop(), OnStop);
+                        if (e is StartedCommandEvent started) OnStart();
+                    }, ex =>
+                    {
+                        if (ex is TaskCanceledException taskCanceledException) OnStop();
+                        // TODO: log out exception
+                    }, OnStop);
         }
         catch (OperationCanceledException ex)
         {
