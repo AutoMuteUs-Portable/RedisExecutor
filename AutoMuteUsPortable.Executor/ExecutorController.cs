@@ -281,15 +281,11 @@ public class ExecutorController : ExecutorControllerBase
                     e =>
                     {
                         if (e is StartedCommandEvent started) OnStart();
-                    }, ex =>
-                    {
-                        if (ex is TaskCanceledException taskCanceledException) OnStop();
-                        // TODO: log out exception
-                    }, OnStop);
+                    }, _ => OnStop(), OnStop);
         }
         catch (OperationCanceledException ex)
         {
-            // ignored
+            OnStop();
         }
         catch
         {
