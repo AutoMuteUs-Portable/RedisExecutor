@@ -305,17 +305,23 @@ public class ExecutorController : ExecutorControllerBase
 
         #region Stop server in redis manner
 
+        var ewh = new ManualResetEvent(false);
+        Stopped += (sender, args) => ewh.Set();
+
         progress?.OnNext(new ProgressInfo
         {
             name = string.Format("{0}を終了しています", ExecutorConfiguration.type),
             IsIndeterminate = true
         });
-        await Cli.Wrap(Path.Combine(ExecutorConfiguration.binaryDirectory, "redis-cli.exe"))
+        Cli.Wrap(Path.Combine(ExecutorConfiguration.binaryDirectory, "redis-cli.exe"))
             .WithArguments($"-p {ExecutorConfiguration.environmentVariables["REDIS_PORT"]} shutdown")
             .WithWorkingDirectory(ExecutorConfiguration.binaryDirectory)
             .WithStandardOutputPipe(PipeTarget.ToDelegate(ProcessStandardOutput, Encoding.UTF8))
             .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError, Encoding.UTF8))
             .ExecuteAsync(cancellationToken);
+
+        if (WaitHandle.WaitAny(new[] { ewh, cancellationToken.WaitHandle }) != 0)
+            cancellationToken.ThrowIfCancellationRequested();
 
         #endregion
     }
