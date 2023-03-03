@@ -11,6 +11,7 @@ using AutoMuteUsPortable.Shared.Utility;
 using CliWrap;
 using CliWrap.EventStream;
 using FluentValidation;
+using Serilog;
 
 namespace AutoMuteUsPortable.Executor;
 
@@ -59,6 +60,8 @@ public class ExecutorController : ExecutorControllerBase
         validator.ValidateAndThrow(tmp);
 
         ExecutorConfiguration = tmp;
+
+        Log.Debug("ExecutorController is instantiated with {@ExecutorConfiguration}", ExecutorConfiguration);
 
         #endregion
     }
@@ -109,6 +112,8 @@ public class ExecutorController : ExecutorControllerBase
 
         ExecutorConfiguration = executorConfiguration;
 
+        Log.Debug("ExecutorController is instantiated with {@ExecutorConfiguration}", ExecutorConfiguration);
+
         #endregion
     }
 
@@ -156,8 +161,7 @@ public class ExecutorController : ExecutorControllerBase
         if (string.IsNullOrEmpty(checksumUrl))
         {
 #if DEBUG
-            // Continue without checksum file
-            // TODO: log out as DEBUG Level
+            Log.Debug("Checksum is null or empty, skipping integrity check");
             taskProgress?.NextTask(3);
 #else
                 throw new InvalidDataException("Checksum cannot be null or empty");
@@ -230,6 +234,7 @@ public class ExecutorController : ExecutorControllerBase
             {
                 try
                 {
+                    Log.Debug("Killing already running process {ProcessId}", result["ProcessId"]);
                     var processId = (uint)result["ProcessId"];
                     var process = Process.GetProcessById((int)processId);
 
@@ -287,21 +292,18 @@ public class ExecutorController : ExecutorControllerBase
         {
             OnStop();
         }
-        catch
-        {
-            // ignored
-            // TODO: handle exception more elegantly
-        }
 
         taskProgress?.NextTask();
 
         #endregion
     }
 
-    public override async Task GracefullyStop(ISubject<ProgressInfo>? progress = null,
+    public override Task GracefullyStop(ISubject<ProgressInfo>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        if (!IsRunning) return;
+        if (!IsRunning) return Task.CompletedTask;
+
+        Log.Debug("Gracefully stopping {Type}", ExecutorConfiguration.type);
 
         #region Stop server in redis manner
 
@@ -323,12 +325,16 @@ public class ExecutorController : ExecutorControllerBase
         if (WaitHandle.WaitAny(new[] { ewh, cancellationToken.WaitHandle }) != 0)
             cancellationToken.ThrowIfCancellationRequested();
 
+        return Task.CompletedTask;
+
         #endregion
     }
 
     public override Task ForciblyStop(ISubject<ProgressInfo>? progress = null)
     {
         if (!IsRunning) return Task.CompletedTask;
+
+        Log.Debug("Forcibly stopping {Type}", ExecutorConfiguration.type);
 
         #region Stop server
 
@@ -451,11 +457,15 @@ public class ExecutorController : ExecutorControllerBase
 
     private void ProcessStandardOutput(string text)
     {
+        Log.Verbose("[{ExecutorType}] {Text}", ExecutorConfiguration.type, text);
+
         StandardOutput.OnNext(text);
     }
 
     private void ProcessStandardError(string text)
     {
+        Log.Verbose("[{ExecutorType}] {Text}", ExecutorConfiguration.type, text);
+
         StandardError.OnNext(text);
     }
 }
