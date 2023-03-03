@@ -274,7 +274,8 @@ public class ExecutorController : ExecutorControllerBase
             .WithArguments($"\"{redisConfPath.Replace(@"\", @"\\")}\"")
             .WithWorkingDirectory(ExecutorConfiguration.binaryDirectory)
             .WithStandardOutputPipe(PipeTarget.ToDelegate(ProcessStandardOutput, Encoding.UTF8))
-            .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError, Encoding.UTF8));
+            .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError, Encoding.UTF8))
+            .WithValidation(CommandResultValidation.None);
 
         _forcefulCTS = new CancellationTokenSource();
         _gracefulCTS = new CancellationTokenSource();
@@ -320,6 +321,7 @@ public class ExecutorController : ExecutorControllerBase
             .WithWorkingDirectory(ExecutorConfiguration.binaryDirectory)
             .WithStandardOutputPipe(PipeTarget.ToDelegate(ProcessStandardOutput, Encoding.UTF8))
             .WithStandardErrorPipe(PipeTarget.ToDelegate(ProcessStandardError, Encoding.UTF8))
+            .WithValidation(CommandResultValidation.None)
             .ExecuteAsync(cancellationToken);
 
         if (WaitHandle.WaitAny(new[] { ewh, cancellationToken.WaitHandle }) != 0)
